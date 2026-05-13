@@ -282,7 +282,7 @@ def _markdown_migration_section(function_name: str, explanation: str, before: st
 
 def _extract_after_python_blocks_from_migration_md(md: str) -> list[tuple[str, str]]:
     """For each ``## `name` `` section, return (function_name, after_code) from the **After:** fence."""
-    parts = re.split(r"^## `([^`]+)`\s*\r?$", md, flags=re.MULTILINE)
+    parts = re.split(r"^## `([^`]+)`\s*$", md, flags=re.MULTILINE)
     out: list[tuple[str, str]] = []
     for i in range(1, len(parts), 2):
         fname = parts[i].strip()
@@ -882,32 +882,239 @@ class Pipeline:
     def write_impact_report(self) -> None:
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         path = OUTPUT_DIR / "impact_report.md"
-        lines = [
+        now = datetime.now(timezone.utc)
+
+        def _src_name(sid: str) -> str:
+            for s in self.sources:
+                if str(s.get("source_id")) == sid:
+                    return str(s.get("name") or sid)
+            return sid
+
+        def _esc_cell(val: Any) -> str:
+            return str(val if val is not None else "").replace("|", "\\|").replace("\n", " ").strip()[:200]
+
+        source_ids = [str(s["source_id"]) for s in self.sources]
+        total_ingested = sum(len(self.parsed_by_source.get(sid, [])) for sid in source_ids)
+        recent_count = sum(len(self.filtered_by_source.get(sid, [])) for sid in source_ids)
+
+        high_risk_entry_count = 0
+        sources_with_high: set[str] = set()
+        for sid in source_ids:
+            for r in self.classified_by_source.get(sid, []):
+                if r.get("breaking_risk") in ("critical", "high"):
+                    high_risk_entry_count += 1
+                    sources_with_high.add(sid)
+
+        ci = self.codebase_impact if isinstance(self.codebase_impact, dict) else {}
+        raw_impacts = ci.get("impacts")
+        impacts_list = raw_impacts if isinstance(raw_impacts, list) else []
+        affected_fn_count = sum(
+            1 for imp in impacts_list if isinstance(imp, dict) and imp.get("affected") is True
+        )
+
+        lines: list[str] = [
             "# SDK changelog impact report",
             "",
-            f"Generated (UTC): {datetime.now(timezone.utc).isoformat()}",
+            f"**Generated (UTC):** {now.strftime('%Y-%m-%d %H:%M:%S')}Z",
             "",
-            "## High-risk Stripe changes",
-            "```json",
-            json.dumps(self.high_risk_stripe, indent=2),
-            "```",
+            "This report aggregates parsed changelogs, classification output, codebase impact analysis, "
+            "migration artifacts, and deterministic validation results.",
             "",
-            "## Codebase impact (model)",
-            "```json",
-            json.dumps(self.codebase_impact, indent=2),
-            "```",
+            "## Executive Summary",
             "",
-            "## Migration guides (model)",
-            "```json",
-            json.dumps(self.migration_guides, indent=2),
-            "```",
+            "Key pipeline metrics at the time of report generation:",
             "",
-            "## Migration validation (model)",
-            "```json",
-            json.dumps(self.migration_validation, indent=2),
-            "```",
+            "| Metric | Count |",
+            "| --- | ---: |",
+            f"| Total ingested entries (all sources) | {total_ingested} |",
+            f"| Recent / filtered entries (post 90-day rule) | {recent_count} |",
+            f"| Breaking / high-risk entries (`breaking_risk` critical or high, all sources) | {high_risk_entry_count} |",
+            f"| Affected functions (`codebase_impact`, `affected` = true) | {affected_fn_count} |",
+            "",
+            f"- **Stripe high-risk selection:** {len(self.high_risk_stripe)} entries carried into downstream analysis.",
+            f"- **Sources configured:** {len(self.sources)}",
+            "",
+            "## Breaking Changes by Source",
             "",
         ]
+
+        for src in self.sources:
+            sid = str(src.get("source_id") or "")
+            name = str(src.get("name") or sid)
+            rows = [
+                r
+                for r in self.classified_by_source.get(sid, [])
+                if isinstance(r, dict)
+                and (
+                    r.get("change_type") == "breaking"
+                    or r.get("breaking_risk") in ("critical", "high")
+                )
+            ]
+            lines.append(f"### {_esc_cell(name)} (`{_esc_cell(sid)}`)")
+            lines.append("")
+            if not rows:
+                lines.append("*No breaking-typed or critical/high breaking-risk entries in the filtered window for this source.*")
+                lines.append("")
+                continue
+            lines.append("| Entry ID | Title | Change type | Breaking risk |")
+            lines.append("| --- | --- | --- | --- |")
+            for r in rows[:50]:
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            _esc_cell(r.get("entry_id")),
+                            _esc_cell(r.get("change_title")),
+                            _esc_cell(r.get("change_type")),
+                            _esc_cell(r.get("breaking_risk")),
+                        ]
+                    )
+                    + " |"
+                )
+            if len(rows) > 50:
+                lines.append("")
+                lines.append(f"*Showing 50 of {len(rows)} rows for this source.*")
+            lines.append("")
+
+        lines.extend(
+            [
+                "## Codebase Impact",
+                "",
+            ]
+        )
+        if not impacts_list:
+            lines.append("*No impact rows were produced (empty `impacts` list).*")
+        else:
+            lines.append("| Function | Affected | Breaking detail | Related entry IDs |")
+            lines.append("| --- | --- | --- | --- |")
+            for imp in impacts_list:
+                if not isinstance(imp, dict):
+                    continue
+                rel = imp.get("related_entry_ids")
+                rel_s = ", ".join(str(x) for x in rel) if isinstance(rel, list) else ""
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            _esc_cell(imp.get("function_name")),
+                            _esc_cell(imp.get("affected")),
+                            _esc_cell(imp.get("breaking_detail")),
+                            _esc_cell(rel_s)[:180],
+                        ]
+                    )
+                    + " |"
+                )
+        expl = ci.get("explanation")
+        if isinstance(expl, str) and expl.strip():
+            lines.extend(["", f"> {expl.strip()}", ""])
+
+        lines.extend(
+            [
+                "## Migration Guides",
+                "",
+            ]
+        )
+        mg_path = OUTPUT_DIR / "migration_guides.md"
+        lines.append(f"- **Artifact:** `{mg_path.resolve()}`")
+        guides = self.migration_guides.get("guides") if isinstance(self.migration_guides, dict) else None
+        if isinstance(guides, list) and guides:
+            lines.append("")
+            lines.append("| Function | Title |")
+            lines.append("| --- | --- |")
+            for g in guides:
+                if not isinstance(g, dict):
+                    continue
+                lines.append(
+                    "| "
+                    + " | ".join([_esc_cell(g.get("function_name")), _esc_cell(g.get("title"))])
+                    + " |"
+                )
+        else:
+            lines.append("- *No per-function migration guide rows were recorded (see markdown artifact for narrative).*")
+        lines.append("")
+        mv = self.migration_validation if isinstance(self.migration_validation, dict) else {}
+        mv_path = OUTPUT_DIR / "migration_validation.json"
+        lines.append(f"- **Validation artifact:** `{mv_path.resolve()}`")
+        lines.append(f"- **All \"After\" snippets valid Python (AST):** `{mv.get('valid', False)}`")
+        lines.append("")
+
+        lines.extend(
+            [
+                "## Unaffected Sources",
+                "",
+                "Sources with **no** classified entries at `breaking_risk` **critical** or **high** in the filtered set:",
+                "",
+            ]
+        )
+        unaffected = [s for s in self.sources if str(s.get("source_id")) not in sources_with_high]
+        if not unaffected:
+            lines.append("*All configured sources have at least one critical/high breaking-risk entry in the filtered window.*")
+        else:
+            lines.append("| Source | ID |")
+            lines.append("| --- | --- |")
+            for s in unaffected:
+                lines.append(
+                    "| "
+                    + " | ".join([_esc_cell(s.get("name")), _esc_cell(s.get("source_id"))])
+                    + " |"
+                )
+        lines.append("")
+
+        lines.extend(
+            [
+                "## Security Alerts",
+                "",
+            ]
+        )
+        sec_rows: list[tuple[str, dict[str, Any]]] = []
+        for sid in source_ids:
+            for r in self.classified_by_source.get(sid, []):
+                if isinstance(r, dict) and r.get("change_type") == "security":
+                    sec_rows.append((sid, r))
+        if not sec_rows:
+            lines.append("*No entries classified as `security` in the filtered window.*")
+        else:
+            lines.append("| Source | Entry ID | Title | Breaking risk |")
+            lines.append("| --- | --- | --- | --- |")
+            for sid, r in sec_rows[:80]:
+                lines.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            _esc_cell(_src_name(sid)),
+                            _esc_cell(r.get("entry_id")),
+                            _esc_cell(r.get("change_title")),
+                            _esc_cell(r.get("breaking_risk")),
+                        ]
+                    )
+                    + " |"
+                )
+            if len(sec_rows) > 80:
+                lines.append("")
+                lines.append(f"*Showing 80 of {len(sec_rows)} security-classified rows.*")
+        lines.append("")
+
+        lines.extend(
+            [
+                "## Version Pinning Recommendation",
+                "",
+            ]
+        )
+        if high_risk_entry_count > 0 or len(self.high_risk_stripe) > 0:
+            lines.append(
+                "Pin Stripe (and related) SDK packages to **known-good minor versions** that you have already "
+                "tested against this codebase. Avoid floating semver ranges (`>=`) for those dependencies until "
+                "the breaking or high-risk items above are triaged, migration guides are applied, and automated "
+                "tests pass. Schedule a deliberate upgrade with a changelog review for each bump."
+            )
+        else:
+            lines.append(
+                "No critical/high breaking-risk signals were detected in the filtered changelog window. "
+                "Continue routine dependency hygiene: prefer **locked** or **narrow** version ranges in lockfiles, "
+                "and re-run this pipeline on a schedule or before major releases."
+            )
+        lines.append("")
+
         path.write_text("\n".join(lines), encoding="utf-8")
         self.impact_report_path = path
         self._advance(Stage.IMPACT_REPORT_WRITTEN)
