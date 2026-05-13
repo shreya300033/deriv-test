@@ -1,0 +1,22 @@
+{
+  "sources": [
+    {
+      "source_id": "stripe_node",
+      "name": "Stripe Node.js SDK",
+      "url": "https://raw.githubusercontent.com/stripe/stripe-node/master/CHANGELOG.md",
+      "format": "markdown"
+    },
+    {
+      "source_id": "openai_python",
+      "name": "OpenAI Python SDK",
+      "url": "https://raw.githubusercontent.com/openai/openai-python/main/CHANGELOG.md",
+      "format": "markdown"
+    },
+    {
+      "source_id": "twilio",
+      "name": "Twilio Changelog",
+      "url": "https://www.twilio.com/en-us/changelog",
+      "format": "html"
+    }
+  ]
+}

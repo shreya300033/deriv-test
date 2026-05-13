@@ -1,0 +1,18 @@
+{
+  "source_id": "twilio",
+  "cutoff": "2026-02-12",
+  "today": "2026-05-13",
+  "filter_note": "no entries within 90-day window or all published_at null; used first 5 entries",
+  "entries": [
+    {
+      "entry_id": "twilio-000",
+      "source_id": "twilio",
+      "source_name": "Twilio Changelog",
+      "version_or_date": "<!DOCTYPE HTML>",
+      "published_at": null,
+      "change_title": "<!DOCTYPE HTML>",
+      "change_body": "<html lang=\"en\">\n<head>\n    <meta charset=\"UTF-8\"/>\n    <title>Changelog | Twilio</title>\n    \n    \n    <meta name=\"template\" content=\"base-page\"/>\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>\n    <meta name=\"robots\" content=\"index\"/>\n    <meta property=\"og:url\" content=\"https://www.twilio.com/en-us/changelog\"/>\n    <meta name=\"twitter:url\" content=\"https://www.twilio.com/en-us/changelog\"/>\n    <meta name=\"brand\" content=\"twilio\"/>\n\n    <meta name=\"content-page-ref\" content=\"6SkxcrgzKlWWr8hKD4v8OhnBMrcCcJKWU-PVwYe9HGYMEUvhiiyPIJdC6KIa8NzfOcg3KPO4ii9Yp9mWoCnZlQ\"/>\n<script defer=\"defer\" type=\"text/javascript\" src=\"https://rum.hlx.page/.rum/@adobe/helix-rum-js@%5E2/dist/micro.js\" data-routing=\"program=62254,environment=555373,tier=publish\"></script>\n<link rel=\"canonical\" href=\"https://www.twilio.com/en-us/changelog\"/>\n    \n        \n            <link rel=\"alternate\" href=\"https://www.twilio.com/en-us/changelog\" hreflang=\"en-us\"/>\n        \n        \n            <link rel=\"alternate\" href=\"https://www.twilio.com/en-us/changelog\" hreflang=\"en\"/>\n        \n    \n    \n\n\n\n\n\n\n\n\n\n\n\n\n  \n    \n    \n      \n    \n    \n    <!-- TrustArc Cookies Consent script start for CCM Advanced -->\n    <script async=\"async\" defer=\"defer\" src='https://consent.trustarc.com/notice?domain=twilio.com&c=teconsent&gtm=1&js=nj&noticeType=bb'></script>\n  \n\n\n\n\n\n\n  \n\n\n\n\n  \n  \n  <!-- Google Tag Manager -->\n  <script>\n    (function (w, d, s, l, i) {\n      w[l] = w[l] || [];\n      w[l].push({ \"gtm.start\": new Date().getTime(), event: \"gtm.js\" });\n      var f = d.getElementsByTagName(s)[0],\n        j = d.createElement(s),\n        dl = l != \"dataLayer\" ? \"&l=\" + l : \"\";\n      j.async = true;\n      j.src = \"https://www.googletagmanager.com/gtm.js?id=\" + i + dl;\n      j.onerror = function () {\n        if (w.disableAF) {\n          w.disableAF();\n        }\n      };\n      f.parentNode.insertBefore(j, f);\n    })(window, document, \"script\", \"dataLayer\", 'GTM-5JLZ694');\n  </script>\n  <!-- End Go",
+      "change_type_raw": null
+    }
+  ]
+}
